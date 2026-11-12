@@ -60,10 +60,8 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="/" aria-label="WebArena home">
-          <span className="brand-mark">W</span>
-          <span>WebArena <b>Agent</b></span>
+          WebArena
         </a>
-        <div className="secure-note"><span className="live-dot" /> Local browser control</div>
       </header>
 
       <main className="workspace">
