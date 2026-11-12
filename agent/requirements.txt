@@ -1,0 +1,1 @@
+# Browser automation dependencies will be added when the agent is implemented.
