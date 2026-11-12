@@ -88,10 +88,12 @@ function App() {
               <div className="session-row">
                 <label>
                   Browser session
-                  <select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>
-                    <option value="">Private agent browser</option>
-                    {connectedTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.title} — {tab.url}</option>)}
-                  </select>
+                  <span className="select-wrap">
+                    <select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>
+                      <option value="">Private agent browser</option>
+                      {connectedTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.title} — {tab.url}</option>)}
+                    </select>
+                  </span>
                 </label>
                 <button type="button" className="text-button" onClick={refreshConnectedTabs}>Refresh tabs</button>
               </div>
@@ -104,15 +106,14 @@ function App() {
 
           <section className="panel activity-panel" aria-live="polite">
             <div className="panel-heading">
-              <div><p className="section-kicker">Live activity</p><h2>{agentTask ? 'Task progress' : 'Ready when you are'}</h2></div>
-              {agentTask && <span className={`status ${agentTask.status}`}>{agentTask.status}</span>}
+              <div><h2>{agentTask ? 'Agent thinking' : 'Ready when you are'}</h2></div>
             </div>
-            {!agentTask && <div className="empty-state"><span className="empty-icon">✦</span><p>Start a task to see the agent’s progress here.</p></div>}
+            {!agentTask && <div className="empty-state"><span className="empty-icon">✦</span><p>Your agent will think out loud here.</p></div>}
             {agentTask && <>
               <p className="result">{agentTask.result || (isRunning ? 'The agent is reading the page and choosing its next move.' : '')}</p>
-              <ol className="activity-log">
-                {(agentTask.logs?.length ? agentTask.logs : ['Getting the browser ready…']).map((log, index) => <li key={`${log}-${index}`}>{log}</li>)}
-              </ol>
+              <div className="thinking-feed">
+                {(agentTask.logs?.length ? agentTask.logs : ['Getting the browser ready…']).map((log, index) => <p key={`${log}-${index}`} className="thought"><span className="thought-mark">{index === agentTask.logs.length - 1 && isRunning ? '◌' : '·'}</span>{log}</p>)}
+              </div>
             </>}
           </section>
         </div>

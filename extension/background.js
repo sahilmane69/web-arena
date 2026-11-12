@@ -1,6 +1,10 @@
 const API = 'http://127.0.0.1:3001'
 let polling = false
 
+// A Chrome extension service worker can restart at any time. Resume the tab the
+// user explicitly connected instead of waiting for the popup to be opened again.
+resumeConnection()
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'connect-tab') {
     connectTab(message.tab).then(sendResponse).catch((error) => sendResponse({ error: error.message }))
@@ -27,6 +31,20 @@ async function connectTab(tab) {
   return data
 }
 
+async function resumeConnection() {
+  const { connection } = await chrome.storage.local.get('connection')
+  if (!connection) return
+  try {
+    await chrome.debugger.attach({ tabId: connection.tabId }, '1.3')
+  } catch (error) {
+    if (!String(error.message).includes('Another debugger')) {
+      await chrome.storage.local.remove('connection')
+      return
+    }
+  }
+  pollCommands()
+}
+
 async function pollCommands() {
   if (polling) return
   polling = true
@@ -35,6 +53,10 @@ async function pollCommands() {
     if (!connection) break
     try {
       const response = await fetch(`${API}/api/extension/commands?connectionId=${connection.connectionId}`)
+      if (response.status === 404) {
+        await chrome.storage.local.remove('connection')
+        break
+      }
       if (!response.ok) throw new Error('The local server is not available.')
       const command = await response.json()
       if (command) {
@@ -65,6 +87,15 @@ async function runCommand(tabId, command) {
       return { ok: true }
     }
     const result = await evaluate(tabId, actionScript(command))
+    if (result?.clickPoint) {
+      await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+        type: 'mousePressed', x: result.clickPoint.x, y: result.clickPoint.y, button: 'left', clickCount: 1,
+      })
+      await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x: result.clickPoint.x, y: result.clickPoint.y, button: 'left', clickCount: 1,
+      })
+      await pause(900)
+    }
     return result || { ok: true }
   } catch (error) {
     return { error: error.message }
@@ -75,42 +106,54 @@ async function evaluate(tabId, expression) {
   const result = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
     expression, returnByValue: true, awaitPromise: true,
   })
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text)
+  if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text)
   return result.result.value
 }
 
 function actionScript(command) {
   const input = JSON.stringify(command)
   return `(() => {
+    try {
     const command = ${input};
     const visible = element => {
       const style = getComputedStyle(element);
       return style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
     };
     const labelText = element => element.labels ? [...element.labels].map(label => label.innerText).join(' ') : '';
-    const roleOf = element => element.getAttribute('role') || (element.tagName === 'BUTTON' ? 'button' : element.tagName === 'A' ? 'link' : element.type === 'search' ? 'searchbox' : ['INPUT', 'TEXTAREA'].includes(element.tagName) ? 'textbox' : '');
-    const nameOf = element => (element.getAttribute('aria-label') || labelText(element) || element.innerText || element.value || element.placeholder || '').trim();
+    const roleOf = element => element.getAttribute('role') || (element.tagName === 'BUTTON' ? 'button' : element.tagName === 'A' ? 'link' : ['button', 'submit', 'reset', 'image'].includes(element.type) ? 'button' : element.type === 'search' ? 'searchbox' : ['checkbox', 'radio'].includes(element.type) ? element.type : ['INPUT', 'TEXTAREA'].includes(element.tagName) ? 'textbox' : '');
+    const nameOf = element => (element.getAttribute('aria-label') || (element.getAttribute('aria-labelledby') || '').split(/\\s+/).map(id => document.getElementById(id)?.innerText || '').join(' ') || labelText(element) || element.innerText || element.value || element.placeholder || '').trim();
+    const normalise = value => value.replace(/\\s+/g, ' ').trim().toLowerCase();
     const controls = () => [...document.querySelectorAll('a[href], button, input:not([type=hidden]), textarea, select, [role], [contenteditable=true]')].filter(visible);
-    const findRole = () => controls().find(element => roleOf(element) === command.value && nameOf(element) === command.target);
+    const findRole = () => controls().find(element => roleOf(element) === command.value && (normalise(nameOf(element)) === normalise(command.target) || normalise(nameOf(element)).includes(normalise(command.target))));
+    const clickPoint = element => {
+      if (element.disabled || element.getAttribute('aria-disabled') === 'true') fail('This control is currently disabled.');
+      element.scrollIntoView({ block: 'center', inline: 'center' });
+      const box = element.getBoundingClientRect();
+      if (!box.width || !box.height) fail('This control is not visible.');
+      return { clickPoint: { x: box.left + box.width / 2, y: box.top + box.height / 2 } };
+    };
     const fail = text => { throw new Error(text); };
     if (command.type === 'inspect') {
       return {
         url: location.href,
         title: document.title,
-        visible_text: document.body.innerText,
-        accessibility_tree: [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role],a[href],button,input,textarea,select')].filter(visible).slice(0, 150).map(element => (roleOf(element) || element.tagName.toLowerCase()) + ' ' + nameOf(element)).join('\\n'),
-        interactive_elements: controls().slice(0, 100).map(element => ({ tag: element.tagName.toLowerCase(), role: roleOf(element), name: nameOf(element), type: element.type || '', placeholder: element.placeholder || '', href: element.href || '' })),
+        visible_text: document.body?.innerText || '',
+        accessibility_tree: [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role],a[href],button,input,textarea,select')].filter(visible).slice(0, 300).map(element => (roleOf(element) || element.tagName.toLowerCase()) + ' ' + nameOf(element)).join('\\n'),
+        interactive_elements: controls().slice(0, 250).map(element => ({ tag: element.tagName.toLowerCase(), role: roleOf(element), name: nameOf(element), type: element.type || '', placeholder: element.placeholder || '', href: element.href || '' })),
       };
     }
-    if (command.type === 'click_role') { const element = findRole() || fail('Accessible control not found.'); element.click(); return { ok: true }; }
-    if (command.type === 'click_text') { const element = controls().find(item => nameOf(item) === command.target) || fail('Text control not found.'); element.click(); return { ok: true }; }
-    if (command.type === 'click_selector') { const element = document.querySelector(command.target) || fail('Selector not found.'); element.click(); return { ok: true }; }
+    if (command.type === 'click_role') { const element = findRole() || fail('Accessible control not found.'); return clickPoint(element); }
+    if (command.type === 'click_text') { const element = controls().find(item => normalise(nameOf(item)) === normalise(command.target)) || fail('Text control not found.'); return clickPoint(element); }
+    if (command.type === 'click_selector') { const element = document.querySelector(command.target) || fail('Selector not found.'); return clickPoint(element); }
     if (command.type === 'fill_label') { const label = [...document.querySelectorAll('label')].find(item => item.innerText.trim() === command.target) || fail('Label not found.'); const element = document.getElementById(label.htmlFor) || label.querySelector('input,textarea'); if (!element) fail('Field for label not found.'); element.value = command.value; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return { ok: true }; }
     if (command.type === 'fill_placeholder') { const element = [...document.querySelectorAll('input,textarea')].find(item => item.placeholder === command.target) || fail('Placeholder not found.'); element.value = command.value; element.dispatchEvent(new Event('input', { bubbles: true })); return { ok: true }; }
     if (command.type === 'fill_selector') { const element = document.querySelector(command.target) || fail('Selector not found.'); element.value = command.value; element.dispatchEvent(new Event('input', { bubbles: true })); return { ok: true }; }
     if (command.type === 'type') { const element = document.querySelector(command.target) || fail('Selector not found.'); element.focus(); element.value += command.value; element.dispatchEvent(new Event('input', { bubbles: true })); return { ok: true }; }
     if (command.type === 'search') { const element = controls().find(item => roleOf(item) === 'searchbox') || document.querySelector('input[type=search]') || fail('Search field not found.'); element.value = command.value; element.dispatchEvent(new Event('input', { bubbles: true })); element.form?.requestSubmit(); element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return { ok: true }; }
     throw new Error('Unsupported command.');
+    } catch (error) {
+      return { error: error?.stack || error?.message || String(error) };
+    }
   })()`
 }
 

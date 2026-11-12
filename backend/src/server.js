@@ -13,7 +13,9 @@ const tasks = new Map()
 const connectedTabs = new Map()
 const commandResults = new Map()
 
-app.use(express.json())
+// Amazon and other large pages can return a sizeable accessibility snapshot.
+// This remains intentionally bounded for the local extension bridge.
+app.use(express.json({ limit: '1mb' }))
 
 app.get('/api/health', (_request, response) => {
   response.json({ status: 'ok' })
@@ -89,6 +91,9 @@ app.post('/api/extension/connect', (request, response) => {
   const { tabId, title, url } = request.body
   if (!Number.isInteger(tabId) || typeof url !== 'string') {
     return response.status(400).json({ error: 'tabId and url are required.' })
+  }
+  for (const [id, connection] of connectedTabs) {
+    if (connection.tabId === tabId) connectedTabs.delete(id)
   }
   const id = randomUUID()
   connectedTabs.set(id, { id, tabId, title: title || 'Connected tab', url, commands: [] })
