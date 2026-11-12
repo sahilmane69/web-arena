@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "WebArena Agent Connector",
+  "version": "0.1.0",
+  "description": "Connect one Chrome tab to the local WebArena agent.",
+  "permissions": ["activeTab", "debugger", "storage", "tabs"],
+  "host_permissions": ["http://127.0.0.1:3001/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Connect tab to WebArena Agent"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}

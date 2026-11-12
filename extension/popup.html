@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebArena Connector</title>
+    <style>
+      body { width: 260px; margin: 0; padding: 16px; font: 14px system-ui, sans-serif; color: #172033; }
+      h1 { margin: 0 0 8px; font-size: 16px; }
+      p { line-height: 1.45; color: #526079; }
+      button { padding: 8px 12px; color: white; background: #2d5bd1; border: 0; border-radius: 6px; cursor: pointer; }
+      #status { min-height: 20px; margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>WebArena Connector</h1>
+    <p>Connect the current tab. The local agent can then use its existing signed-in session.</p>
+    <button id="connect">Connect this tab</button>
+    <p id="status"></p>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
