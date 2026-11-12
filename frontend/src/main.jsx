@@ -10,13 +10,10 @@ function App() {
   const [connectedTabs, setConnectedTabs] = useState([])
   const [connectionId, setConnectionId] = useState('')
 
-  useEffect(() => {
-    refreshConnectedTabs()
-  }, [])
+  useEffect(() => { refreshConnectedTabs() }, [])
 
   useEffect(() => {
     if (!agentTask || agentTask.status !== 'running') return undefined
-
     const poll = async () => {
       const response = await fetch(`/api/tasks/${agentTask.id}`)
       if (!response.ok) throw new Error('Could not retrieve agent progress.')
@@ -26,27 +23,6 @@ function App() {
     poll().catch((pollError) => setError(pollError.message))
     return () => window.clearInterval(timer)
   }, [agentTask?.id, agentTask?.status])
-
-  async function startTask(event) {
-    event.preventDefault()
-    setError('')
-    setAgentTask(null)
-
-    try {
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, task, maxSteps: 10, connectionId: connectionId || undefined }),
-      })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not start the agent.')
-      setAgentTask({ id: data.id, status: 'running', logs: [] })
-    } catch (requestError) {
-      setError(requestError.message)
-    }
-  }
-
-  const isRunning = agentTask?.status === 'running'
 
   async function refreshConnectedTabs() {
     try {
@@ -59,49 +35,94 @@ function App() {
     }
   }
 
+  async function startTask(event) {
+    event.preventDefault()
+    setError('')
+    setAgentTask(null)
+    try {
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, task, connectionId: connectionId || undefined }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not start the agent.')
+      setAgentTask({ id: data.id, status: 'running', logs: [] })
+    } catch (requestError) {
+      setError(requestError.message)
+    }
+  }
+
+  const isRunning = agentTask?.status === 'running'
+  const usesConnectedTab = Boolean(connectionId)
+
   return (
-    <main>
-      <p className="eyebrow">WebArena-inspired</p>
-      <h1>AI browser agent</h1>
-      <p className="description">Give the agent a starting URL and a task. Progress appears below.</p>
+    <div className="app-shell">
+      <header className="topbar">
+        <a className="brand" href="/" aria-label="WebArena home">
+          <span className="brand-mark">W</span>
+          <span>WebArena <b>Agent</b></span>
+        </a>
+        <div className="secure-note"><span className="live-dot" /> Local browser control</div>
+      </header>
 
-      <form onSubmit={startTask} className="task-form">
-        <label>
-          Starting URL
-          <input type="url" value={url} onChange={(event) => setUrl(event.target.value)} required />
-        </label>
-        <label>
-          Task
-          <textarea value={task} onChange={(event) => setTask(event.target.value)} required rows="3" />
-        </label>
-        <label>
-          Browser session <span className="optional">(optional)</span>
-          <select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>
-            <option value="">Use a new private agent browser</option>
-            {connectedTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.title} — {tab.url}</option>)}
-          </select>
-        </label>
-        <button type="button" className="secondary" onClick={refreshConnectedTabs}>Refresh connected tabs</button>
-        <button type="submit" disabled={isRunning}>{isRunning ? 'Agent running…' : 'Start agent'}</button>
-      </form>
-
-      {error && <p className="error">{error}</p>}
-      {agentTask && (
-        <section className="progress" aria-live="polite">
-          <div className="progress-heading">
-            <h2>Execution progress</h2>
-            <span className={`status ${agentTask.status}`}>{agentTask.status}</span>
-          </div>
-          {agentTask.result && <p className="result">{agentTask.result}</p>}
-          <pre>{agentTask.logs?.join('\n') || 'Starting Python agent…'}</pre>
+      <main className="workspace">
+        <section className="hero">
+          <p className="eyebrow">Browser automation, on your terms</p>
+          <h1>Give work to your browser.</h1>
+          <p>WebArena completes multi-step web tasks and keeps you informed in plain language.</p>
         </section>
-      )}
-    </main>
+
+        <div className="dashboard">
+          <section className="panel task-panel">
+            <div className="panel-heading">
+              <div><p className="section-kicker">New task</p><h2>What should the agent do?</h2></div>
+              <span className="step-chip">01</span>
+            </div>
+            <form onSubmit={startTask} className="task-form">
+              <label>
+                Starting URL
+                <input type="url" value={url} onChange={(event) => setUrl(event.target.value)} required />
+              </label>
+              <label>
+                Describe the task
+                <textarea value={task} onChange={(event) => setTask(event.target.value)} required rows="4" />
+              </label>
+              <div className="session-row">
+                <label>
+                  Browser session
+                  <select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>
+                    <option value="">Private agent browser</option>
+                    {connectedTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.title} — {tab.url}</option>)}
+                  </select>
+                </label>
+                <button type="button" className="text-button" onClick={refreshConnectedTabs}>Refresh tabs</button>
+              </div>
+              <p className="session-help">{usesConnectedTab ? 'Using your connected tab and its signed-in session.' : 'A separate private browser session will be used.'}</p>
+              <button className="primary-button" type="submit" disabled={isRunning}>
+                <span>{isRunning ? 'Working on it…' : 'Run task'}</span><span aria-hidden="true">→</span>
+              </button>
+            </form>
+          </section>
+
+          <section className="panel activity-panel" aria-live="polite">
+            <div className="panel-heading">
+              <div><p className="section-kicker">Live activity</p><h2>{agentTask ? 'Task progress' : 'Ready when you are'}</h2></div>
+              {agentTask && <span className={`status ${agentTask.status}`}>{agentTask.status}</span>}
+            </div>
+            {!agentTask && <div className="empty-state"><span className="empty-icon">✦</span><p>Start a task to see the agent’s progress here.</p></div>}
+            {agentTask && <>
+              <p className="result">{agentTask.result || (isRunning ? 'The agent is reading the page and choosing its next move.' : '')}</p>
+              <ol className="activity-log">
+                {(agentTask.logs?.length ? agentTask.logs : ['Getting the browser ready…']).map((log, index) => <li key={`${log}-${index}`}>{log}</li>)}
+              </ol>
+            </>}
+          </section>
+        </div>
+        {error && <p className="error-message">{error}</p>}
+      </main>
+    </div>
   )
 }
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMode>)

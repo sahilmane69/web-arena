@@ -20,13 +20,13 @@ app.get('/api/health', (_request, response) => {
 })
 
 app.post('/api/tasks', (request, response) => {
-  const { url, task, maxSteps = 10, connectionId } = request.body
+  const { url, task, maxSteps, connectionId } = request.body
 
   if (typeof url !== 'string' || !url.trim() || typeof task !== 'string' || !task.trim()) {
     return response.status(400).json({ error: 'url and task are required.' })
   }
-  if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 20) {
-    return response.status(400).json({ error: 'maxSteps must be an integer from 1 to 20.' })
+  if (maxSteps !== undefined && (!Number.isInteger(maxSteps) || maxSteps < 1)) {
+    return response.status(400).json({ error: 'maxSteps must be a positive integer when provided.' })
   }
   if (connectionId && !connectedTabs.has(connectionId)) {
     return response.status(400).json({ error: 'The selected browser tab is no longer connected.' })
@@ -45,7 +45,8 @@ app.post('/api/tasks', (request, response) => {
   }
   tasks.set(id, agentTask)
 
-  const args = ['main.py', agentTask.url, agentTask.task, '--max-steps', String(maxSteps)]
+  const args = ['main.py', agentTask.url, agentTask.task]
+  if (maxSteps !== undefined) args.push('--max-steps', String(maxSteps))
   if (connectionId) {
     args.push('--connected-tab', '--browser-api', `http://127.0.0.1:${port}`, '--connection-id', connectionId)
   }
@@ -66,7 +67,7 @@ app.post('/api/tasks', (request, response) => {
   agentProcess.on('close', (code) => {
     if (agentTask.status === 'failed') return
     agentTask.finishedAt = new Date().toISOString()
-    agentTask.status = code === 0 ? (agentTask.logs.some((line) => line.startsWith('Stopped after')) ? 'stopped' : 'completed') : 'failed'
+    agentTask.status = code === 0 ? (agentTask.logs.some((line) => line.startsWith('Stopped after') || line.startsWith('Stopped because')) ? 'stopped' : 'completed') : 'failed'
     agentTask.result = agentTask.logs.at(-1) || `Python agent exited with code ${code}.`
   })
 

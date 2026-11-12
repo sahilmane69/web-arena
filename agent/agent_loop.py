@@ -96,10 +96,10 @@ class BrowserAgent:
         self,
         controller: BrowserController,
         planner: Planner,
-        max_steps: int = 10,
+        max_steps: int | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
-        if max_steps < 1:
+        if max_steps is not None and max_steps < 1:
             raise ValueError("max_steps must be at least 1")
         self.controller = controller
         self.planner = planner
@@ -113,23 +113,34 @@ class BrowserAgent:
         self.controller.navigate(start_url)
         previous_error: str | None = None
 
-        for step in range(1, self.max_steps + 1):
+        step = 1
+        repeated_errors = 0
+        previous_error_text = ""
+        while self.max_steps is None or step <= self.max_steps:
             page = self.controller.inspect_page()
-            self.logger.info("Step %d: inspected %s", step, page["url"])
+            self.logger.info("Looking at %s", page["url"])
 
             try:
                 action = self.planner.next_action(task, page, previous_error)
-                self.logger.info("Step %d: planned %s", step, action)
+                self.logger.info("Next: %s", _action_description(action))
                 if action["type"] == "done":
                     return AgentResult(True, step, action["reason"] or "Task completed.")
                 self.execute(action)
-                self.logger.info("Step %d: executed %s", step, action["type"])
+                self.logger.info("Done. Checking what changed…")
                 previous_error = None
+                repeated_errors = 0
             except Exception as error:  # Continue so the planner can choose a recovery action.
                 previous_error = str(error)
-                self.logger.warning("Step %d failed: %s", step, previous_error)
+                repeated_errors = repeated_errors + 1 if previous_error == previous_error_text else 1
+                previous_error_text = previous_error
+                self.logger.warning("That step did not work: %s", _short_error(previous_error))
+                if repeated_errors >= 3:
+                    message = "Stopped because the same problem happened three times."
+                    self.logger.warning(message)
+                    return AgentResult(False, step, message)
+            step += 1
 
-        message = f"Stopped after reaching the {self.max_steps}-step limit."
+        message = f"Stopped after reaching the optional {self.max_steps}-step limit."
         self.logger.warning(message)
         return AgentResult(False, self.max_steps, message)
 
@@ -178,3 +189,30 @@ def _compact_page(page: dict[str, Any]) -> dict[str, Any]:
         "accessibility_tree": page["accessibility_tree"][:12000],
         "interactive_elements": page["interactive_elements"][:100],
     }
+
+
+def _action_description(action: dict[str, str]) -> str:
+    """Turn an internal action into a log message a person can scan quickly."""
+    action_type = action["type"]
+    if action_type == "click_role":
+        return f"Clicking {action['target']}"
+    if action_type == "click_text":
+        return f"Opening {action['target']}"
+    if action_type == "fill_label":
+        return f"Filling in {action['target']}"
+    if action_type == "fill_placeholder":
+        return "Filling in a form field"
+    if action_type == "type":
+        return "Typing into a field"
+    if action_type == "search":
+        return f"Searching for “{action['value']}”"
+    if action_type == "navigate":
+        return "Opening the next page"
+    if action_type == "screenshot":
+        return "Saving a screenshot"
+    return "Finishing the task"
+
+
+def _short_error(error: str) -> str:
+    """Avoid filling the UI with a multi-line stack trace or protocol details."""
+    return error.replace("\n", " ")[:180]

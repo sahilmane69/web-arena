@@ -64,16 +64,17 @@ website.
 ## AI execution loop
 
 The agent loop in `agent/agent_loop.py` repeats: inspect the current page, ask the
-AI for one JSON action, execute it, then inspect the updated page. It has a default
-10-step limit, logs every planned action and error, and stops when the AI returns
-`done`.
+AI for one JSON action, execute it, then inspect the updated page. It continues
+until the AI returns `done`; `--max-steps` is available only as an optional
+emergency limit. Logs use plain-language progress updates and repeated identical
+errors stop the task after three attempts.
 
 Add your key to `agent/.env` (the file is ignored by Git), then run a task:
 
 ```bash
 cd agent
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python main.py https://example.com "Find the page heading" --max-steps 5
+.venv/bin/python main.py https://example.com "Find the page heading"
 ```
 
 `agent/.env.example` is a safe template to copy if you need to recreate the file.
