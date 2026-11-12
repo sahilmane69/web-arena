@@ -6,16 +6,24 @@
   </head>
   <body>
     <h1>Browser controller test page</h1>
-    <label>
-      Name
-      <input id="name" type="text" />
-    </label>
-    <button id="save">Save</button>
+    <form id="search-form" role="search">
+      <label for="query">Search the site</label>
+      <input id="query" type="search" placeholder="Search articles" />
+      <button type="submit">Search</button>
+    </form>
+    <label for="name">Name</label>
+    <input id="name" type="text" />
+    <button id="save" type="button">Save</button>
     <p id="message"></p>
     <script>
       document.querySelector('#save').addEventListener('click', () => {
         const name = document.querySelector('#name').value
         document.querySelector('#message').textContent = `Saved: ${name}`
+      })
+      document.querySelector('#search-form').addEventListener('submit', (event) => {
+        event.preventDefault()
+        const query = document.querySelector('#query').value
+        document.querySelector('#message').textContent = `Searched: ${query}`
       })
     </script>
   </body>

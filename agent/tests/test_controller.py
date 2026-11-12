@@ -39,9 +39,16 @@ class BrowserControllerTest(unittest.TestCase):
         self.assertEqual(self.controller.title(), "Playwright Controller Test")
         self.assertIn("Browser controller test page", self.controller.visible_text())
 
-        self.controller.fill("#name", "Ada")
-        self.controller.click("#save")
+        page_details = self.controller.inspect_page()
+        self.assertIn("searchbox", page_details["accessibility_tree"])
+        self.assertTrue(any(item["name"] == "Search" for item in page_details["interactive_elements"]))
+
+        self.controller.fill_by_label("Name", "Ada")
+        self.controller.click_by_role("button", "Save")
         self.assertIn("Saved: Ada", self.controller.visible_text())
+
+        self.controller.search("playwright")
+        self.assertIn("Searched: playwright", self.controller.visible_text())
 
         screenshot_path = TESTS_DIRECTORY / "controller-test.png"
         self.controller.screenshot(screenshot_path)
