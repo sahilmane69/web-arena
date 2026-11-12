@@ -74,8 +74,7 @@ function App() {
         <div className="dashboard">
           <section className="panel task-panel">
             <div className="panel-heading">
-              <div><p className="section-kicker">New task</p><h2>What should the agent do?</h2></div>
-              <span className="step-chip">01</span>
+              <div><h2>What should the agent do?</h2></div>
             </div>
             <form onSubmit={startTask} className="task-form">
               <label>
