@@ -24,7 +24,26 @@ The frontend is served at `http://localhost:5173` and the API at `http://localho
 
 - `frontend/` — React + Vite client
 - `backend/` — Express API
-- `agent/` — Python browser-agent placeholder
+- `agent/` — Python Playwright browser controller
 
-The Python agent currently only provides a runnable entry point; no browser automation has been added.
+## Browser controller
+
+Install the Python dependency and Chromium once:
+
+```bash
+python3 -m venv agent/.venv
+agent/.venv/bin/pip install -r agent/requirements.txt
+agent/.venv/bin/playwright install chromium
+```
+
+Run the local smoke test:
+
+```bash
+cd agent
+.venv/bin/python -m unittest tests/test_controller.py
+```
+
+`agent/browser_controller.py` includes small `navigate`, `title`, `visible_text`,
+`screenshot`, `click`, and `fill` helpers. The test serves its own local HTML page
+and verifies each action in headless Chromium.
 # web-arena

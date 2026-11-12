@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Playwright Controller Test</title>
+  </head>
+  <body>
+    <h1>Browser controller test page</h1>
+    <label>
+      Name
+      <input id="name" type="text" />
+    </label>
+    <button id="save">Save</button>
+    <p id="message"></p>
+    <script>
+      document.querySelector('#save').addEventListener('click', () => {
+        const name = document.querySelector('#name').value
+        document.querySelector('#message').textContent = `Saved: ${name}`
+      })
+    </script>
+  </body>
+</html>
